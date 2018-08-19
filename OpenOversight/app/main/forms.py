@@ -230,12 +230,20 @@ class AddUnitForm(Form):
     submit = SubmitField(label='Add')
 
 
+class DepartmentSelectForm(Form):
+    department = QuerySelectField('Department',
+                                  validators=[Required()],
+                                  query_factory=dept_choices,
+                                  get_label='name')
+
+
 class AddImageForm(Form):
-    department = QuerySelectField(
-        'Department',
-        validators=[Required()],
-        query_factory=dept_choices,
-        get_label='name')
+    departments = FieldList(FormField(
+                            DepartmentSelectForm, widget=FormFieldWidget()),
+                            description='Departments of officers found in this image',
+                            min_entries=1,
+                            widget=BootstrapListWidget())
+    submit = SubmitField(label='Submit')
 
 
 class DateFieldForm(Form):

@@ -564,6 +564,63 @@ def submit_complaint():
                            officer_image=request.args.get('officer_image'))
 
 
+@limiter.limit('250/minute')
+@main.route('/upload/department', methods=['POST', 'GET'])
+def upload():
+    for k in request.files.keys():
+        file_to_upload = request.files[k]
+        dept_list = []
+        for dept in request.form.keys():
+            if not (dept.startswith("departments") and dept.endswith("department")):
+                continue
+            dept_list.append(request.form[dept])
+        if not allowed_file(file_to_upload.filename):
+            return jsonify(error="File type not allowed!"), 415
+        original_filename = secure_filename(file_to_upload.filename)
+        image_data = file_to_upload.read()
+
+        # See if there is a matching photo already in the db
+        hash_img = compute_hash(image_data)
+        hash_found = Image.query.filter_by(hash_img=hash_img).first()
+        if hash_found:
+            return jsonify(error="Image already uploaded to OpenOversight!"), 400
+
+        # Generate new filename
+        file_extension = original_filename.split('.')[-1]
+        new_filename = '{}.{}'.format(hash_img, file_extension)
+
+        # Save temporarily on local filesystem
+        tmpdir = tempfile.mkdtemp()
+        safe_local_path = os.path.join(tmpdir, new_filename)
+        with open(safe_local_path, 'w') as tmp:
+            tmp.write(image_data)
+        os.umask(SAVED_UMASK)
+
+        # Upload file from local filesystem to S3 bucket and delete locally
+        try:
+            url = upload_file(safe_local_path, original_filename,
+                              new_filename)
+            for dept in dept_list:
+                # Update the database to add the image
+                new_image = Image(filepath=url, hash_img=hash_img, is_tagged=False,
+                                  date_image_inserted=datetime.datetime.now(),
+                                  department_id=dept,
+                                  # TODO: Get the following field from exif data
+                                  date_image_taken=datetime.datetime.now())
+                db.session.add(new_image)
+                db.session.commit()
+            return jsonify(success="Success!"), 200
+        except:  # noqa
+            exception_type, value, full_tback = sys.exc_info()
+            current_app.logger.error('Error uploading to S3: {}'.format(
+                ' '.join([str(exception_type), str(value),
+                          format_exc(full_tback)])
+            ))
+            return jsonify(error="Server error encountered. Try again later."), 500
+        os.remove(safe_local_path)
+        os.rmdir(tmpdir)
+
+
 @main.route('/submit', methods=['GET', 'POST'])
 @limiter.limit('5/minute')
 def submit_data():
@@ -581,56 +638,6 @@ def submit_data():
         preferred_dept_id = Department.query.first().id
         form = AddImageForm()
         return render_template('submit_image.html', form=form, preferred_dept_id=preferred_dept_id)
-
-
-@main.route('/upload/department/<int:department_id>', methods=['POST'])
-@limiter.limit('250/minute')
-def upload(department_id):
-    file_to_upload = request.files['file']
-    if not allowed_file(file_to_upload.filename):
-        return jsonify(error="File type not allowed!"), 415
-    original_filename = secure_filename(file_to_upload.filename)
-    image_data = file_to_upload.read()
-
-    # See if there is a matching photo already in the db
-    hash_img = compute_hash(image_data)
-    hash_found = Image.query.filter_by(hash_img=hash_img).first()
-    if hash_found:
-        return jsonify(error="Image already uploaded to OpenOversight!"), 400
-
-    # Generate new filename
-    file_extension = original_filename.split('.')[-1]
-    new_filename = '{}.{}'.format(hash_img, file_extension)
-
-    # Save temporarily on local filesystem
-    tmpdir = tempfile.mkdtemp()
-    safe_local_path = os.path.join(tmpdir, new_filename)
-    with open(safe_local_path, 'w') as tmp:
-        tmp.write(image_data)
-    os.umask(SAVED_UMASK)
-
-    # Upload file from local filesystem to S3 bucket and delete locally
-    try:
-        url = upload_file(safe_local_path, original_filename,
-                          new_filename)
-        # Update the database to add the image
-        new_image = Image(filepath=url, hash_img=hash_img, is_tagged=False,
-                          date_image_inserted=datetime.datetime.now(),
-                          department_id=department_id,
-                          # TODO: Get the following field from exif data
-                          date_image_taken=datetime.datetime.now())
-        db.session.add(new_image)
-        db.session.commit()
-        return jsonify(success="Success!"), 200
-    except:  # noqa
-        exception_type, value, full_tback = sys.exc_info()
-        current_app.logger.error('Error uploading to S3: {}'.format(
-            ' '.join([str(exception_type), str(value),
-                      format_exc(full_tback)])
-        ))
-        return jsonify(error="Server error encountered. Try again later."), 500
-    os.remove(safe_local_path)
-    os.rmdir(tmpdir)
 
 
 @main.route('/about')

@@ -17,57 +17,80 @@
       <h3>What happens when I submit a photograph?</h3>
       <p class="small">The next step after a photograph of an officer has been submitted is to match it to the correct badge number, name, and OpenOversight ID (a unique identifier in our system). Volunteers <a href="https://openoversight.com/label">sort through submitted images</a> by first confirming that officers are present in each photograph, and then by matching each photograph to the officer it depicts.</p>
    </div>
-   <h3>Select the department that the police officer in your image belongs to:</h3>
    <div class="form-group">
-      <form class="form" name = "deptselect" id = "deptselect" method="post" role="form" label="deptselect">
-         {{ wtf.form_field(form.department) }}
+      <form class="dropzone" id="my-cop-dropzone">
+         <h3>Select the department or departments that the police officer(s) in your image belongs to:</h3>
+         {% for subform in form.departments %}
+         {% with id="js-dept", number=loop.index %}
+         {% include "partials/subform.html" %}
+         {% endwith %}
+         {% endfor %}
+         <button class="btn btn-success js-add-another-button" disabled>Add another department</button>
+         <br>
+         <div><h3>Drop images here to submit photos of officers:</h3>
+            <p class="small">Drag photographs from your computer directly into the box above or click the box to launch a finder window. If you are on mobile, you can click the box above to select pictures from your photo library or camera roll.</p>
+            <div class="dropzone-previews"></div>
+         </div>
+            <br>
+         <button type="submit">Submit image(s)</button>
+         {{ form.hidden_tag() }}
       </form>
-      <br> 
    </div>
 
-   <h3>Drop images here to submit photos of officers:</h3>
 
-   <form id="my-cop-dropzone" action="/upload/department/1" class='dropzone'>
-   </form>
-   <p class="small">Drag photographs from your computer directly into the box above or click the box to launch a finder window. If you are on mobile, you can click the box above to select pictures from your photo library or camera roll.</p>
 
-   <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
-   <script src="{{ url_for('static', filename='js/dropzone.js') }}"></script>
+      <script src="{{ url_for('static', filename='js/addButtons.js') }}"></script>
+      <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+      <script src="{{ url_for('static', filename='js/dropzone.js') }}"></script>
 
-   <script>
-   // Select user's preferred department by default
-   document.getElementById("department").selectedIndex = {{preferred_dept_id}} - 1;
-   // Save the preferred department in dept_id
-   var dept_id = document.getElementById("department").selectedIndex + 1;
 
-   // Store changes in drop down list in dept_id variable
-   $(function() {
-      select_dept = $('#deptselect');
-      select_dept.on('change', function() {
-         // fires when department selection changes
-         dept_id = document.getElementById("department").value;
-      });
-   }); 
+      <script>
 
-   Dropzone.autoDiscover = false;
-   const getURL = (file) => {
-      return "/upload/department/" + dept_id;
-   }
+         Dropzone.options.myCopDropzone = { // The camelized version of the ID of the form element
 
-   let myDropzone = new Dropzone("#my-cop-dropzone", {
-      method: "post",
-      url: getURL,
-      uploadMultiple: false,
-      parallelUploads: 50,
-      acceptedFiles: "image/png, image/jpeg, image/gif, image/jpg",
-      maxFiles: 50,
-      init: function() {
-         this.on("error", function(file, responseText) {
-            file.previewTemplate.appendChild(document.createTextNode(responseText));
-         });
-      }
-   });
-   </script>
+            // The configuration we've talked about above
+            autoProcessQueue: false,
+            uploadMultiple: true,
+            parallelUploads: 50,
+            method: "post",
+            url: "/upload/department",
+            acceptedFiles: "image/png, image/jpeg, image/gif, image/jpg",
+            maxFiles: 50,
+            headers: {
+               'X-CSRFToken': $('meta[name="token"]').attr('content')
+            },
+
+            // The setting up of the dropzone
+            init: function() {
+               var myDropzone = this;
+
+               // First change the button to actually tell Dropzone to process the queue.
+               this.element.querySelector("button[type=submit]").addEventListener("click", function(e) {
+                  // Make sure that the form isn't actually being sent.
+                  e.preventDefault();
+                  e.stopPropagation();
+                  myDropzone.processQueue();
+               });
+
+               // Listen to the sendingmultiple event. In this case, it's the sendingmultiple event instead
+               // of the sending event because uploadMultiple is set to true.
+               this.on("sendingmultiple", function() {
+                  // Gets triggered when the form is actually being sent.
+                  // Hide the success button or the complete form.
+               });
+               this.on("successmultiple", function(files, response) {
+                  // Gets triggered when the files have successfully been sent.
+                  // Redirect user or notify of success.
+               });
+               this.on("errormultiple", function(files, response) {
+                  // Gets triggered when there was an error sending the files.
+                  // Maybe show form again, and notify user of error
+               });
+            }
+
+         }
+
+      </script>
 </div>
 
 <div class="container">

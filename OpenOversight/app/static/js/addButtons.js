@@ -45,7 +45,7 @@ function cloneFieldList(selector) {
 function removeParent(event) {
     event.preventDefault()
     var things_to_add;
-    things_to_add = {"Plate Number" : "license plate", "Link" : "link", "OO Officer ID" : "officer"};
+    things_to_add = {"Plate Number" : "license plate", "Link" : "link", "OO Officer ID" : "officer", "Department" : "department"};
     var previousElement = event.target.parentElement.previousElementSibling
     var nextElement = event.target.parentElement.nextElementSibling
 
